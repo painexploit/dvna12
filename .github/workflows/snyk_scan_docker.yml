@@ -4,9 +4,9 @@ jobs:
   snyk:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v2
     - name: Build a Docker image
-      run: docker build -t dvna-test .
+      run: docker build -t image-file .
     - name: Run Snyk to check Docker image for vulnerabilities
       # Snyk can be used to break the build when it detects vulnerabilities.
       # In this case we want to upload the issues to GitHub Code Scanning
@@ -15,8 +15,29 @@ jobs:
       env:
         SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
       with:
-        image: dvna-test
-        args: --file=Dockerfile
-    - name: Print Vulnerability File
-      run: cat snyk.sarif
-      
+        image: image-file
+        args: --file=Dockerfile --json-file-output=snyk.json
+    - name: Parse Snyk results
+      id: parse_snyk
+      run: |
+        echo "::set-output name=total::$(jq '.vulnerabilities | length' snyk.json)"
+        echo "::set-output name=high::$(jq '[.vulnerabilities[] | select(.severity=="high")] | length' snyk.json)"
+        echo "::set-output name=medium::$(jq '[.vulnerabilities[] | select(.severity=="medium")] | length' snyk.json)"
+        echo "::set-output name=low::$(jq '[.vulnerabilities[] | select(.severity=="low")] | length' snyk.json)"
+        echo "::set-output name=high_list::$(jq -r '[.vulnerabilities[] | select(.severity=="high") | .title] | join(", ")' snyk.json)"
+        echo "::set-output name=medium_list::$(jq -r '[.vulnerabilities[] | select(.severity=="medium") | .title] | join(", ")' snyk.json)"
+        echo "::set-output name=low_list::$(jq -r '[.vulnerabilities[] | select(.severity=="low") | .title] | join(", ")' snyk.json)"
+    - name: Send results to Slack
+      uses: slackapi/slack-github-action@v1.23.0
+      with:
+        slack-message: |
+          Total vulnerabilities: ${{ steps.parse_snyk.outputs.total }}
+          High: ${{ steps.parse_snyk.outputs.high }}
+          ${{ steps.parse_snyk.outputs.high_list }}
+          Medium: ${{ steps.parse_snyk.outputs.medium }}
+          ${{ steps.parse_snyk.outputs.medium_list }}
+          Low: ${{ steps.parse_snyk.outputs.low }}
+          ${{ steps.parse_snyk.outputs.low_list }}
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+  
