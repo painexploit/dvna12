@@ -1,6 +1,6 @@
 # Damn Vulnerable NodeJS Application
 
-FROM node:18.20.2-bookworm-slim
+FROM node:18.20.4-bookworm-slim
 LABEL MAINTAINER "Subash SN"
 
 WORKDIR /app
